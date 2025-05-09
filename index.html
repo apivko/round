@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Circle Drawing Accuracy</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            text-align: center;
+            width: 100%;
+            max-width: 500px;
+            background-color: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: clamp(24px, 5vw, 32px);
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        canvas {
+            border: 2px solid #333;
+            background-color: white;
+            margin: 20px auto;
+            cursor: crosshair;
+            width: 100%;
+            max-width: 400px;
+            height: auto;
+            touch-action: none;
+            display: block;
+        }
+
+        .controls {
+            margin: 20px auto;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            max-width: 400px;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: clamp(14px, 3vw, 16px);
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            touch-action: manipulation;
+            transition: background-color 0.3s ease;
+            min-width: 120px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        #score {
+            font-size: clamp(20px, 4vw, 24px);
+            margin: 20px auto;
+            color: #333;
+            font-weight: bold;
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                padding: 15px;
+            }
+
+            canvas {
+                margin: 15px auto;
+            }
+
+            .controls {
+                gap: 10px;
+            }
+
+            button {
+                padding: 10px 20px;
+                min-width: 100px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Draw a Circle</h1>
+        <canvas id="drawingCanvas" width="400" height="400"></canvas>
+        <div class="controls">
+            <button onclick="clearCanvas()">Clear</button>
+            <button onclick="analyzeCircle()">Analyze</button>
+        </div>
+        <div id="score"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDiv = document.getElementById('score');
+        let isDrawing = false;
+        let points = [];
+
+        // Set canvas size based on device pixel ratio
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = rect.height + 'px';
+        }
+
+        // Initial resize
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Drawing event listeners
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        // Touch event listeners
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd);
+        canvas.addEventListener('touchcancel', handleTouchEnd);
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            startDrawing(mouseEvent);
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            draw(mouseEvent);
+        }
+
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            stopDrawing();
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            points = [];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            addPoint(e);
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            addPoint(e);
+            ctx.beginPath();
+            ctx.moveTo(points[points.length - 2].x, points[points.length - 2].y);
+            ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function addPoint(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            points.push({ x, y });
+        }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            points = [];
+            scoreDiv.textContent = '';
+        }
+
+        function analyzeCircle() {
+            if (points.length < 10) {
+                scoreDiv.textContent = 'Please draw a complete circle first';
+                return;
+            }
+
+            // Calculate center and radius of the drawn circle
+            const center = calculateCenter(points);
+            const radius = calculateAverageRadius(points, center);
+
+            // Draw the perfect circle
+            ctx.beginPath();
+            ctx.arc(center.x, center.y, radius, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Calculate accuracy
+            const accuracy = calculateAccuracy(points, center, radius);
+            scoreDiv.textContent = `Accuracy: ${accuracy.toFixed(1)}%`;
+        }
+
+        function calculateCenter(points) {
+            let sumX = 0;
+            let sumY = 0;
+            points.forEach(point => {
+                sumX += point.x;
+                sumY += point.y;
+            });
+            return {
+                x: sumX / points.length,
+                y: sumY / points.length
+            };
+        }
+
+        function calculateAverageRadius(points, center) {
+            let sumRadius = 0;
+            points.forEach(point => {
+                const dx = point.x - center.x;
+                const dy = point.y - center.y;
+                sumRadius += Math.sqrt(dx * dx + dy * dy);
+            });
+            return sumRadius / points.length;
+        }
+
+        function calculateAccuracy(points, center, radius) {
+            let totalError = 0;
+            points.forEach(point => {
+                const dx = point.x - center.x;
+                const dy = point.y - center.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const error = Math.abs(distance - radius);
+                totalError += error;
+            });
+            
+            const averageError = totalError / points.length;
+            const maxError = radius * 0.5; // Maximum acceptable error
+            const accuracy = Math.max(0, 100 - (averageError / maxError) * 100);
+            return accuracy;
+        }
+    </script>
+</body>
+</html> 
